@@ -16,39 +16,33 @@ AppDomain Injection is a technique that allows execution of arbitrary .NET code 
 ### Technique 1: Config File Hijack
 
 ```mermaid
-flowchart LR
-    subgraph ATTACKER ["Attacker Actions"]
-        A1[Copy powershell.exe\nto TEMP folder]
-        A2[Create\npowershell.exe.config]
-        A3[Place Payload.dll\nin same folder]
+graph LR
+    subgraph Preparation
+        A[Copy powershell.exe to TEMP]
+        B[Create .exe.config file]
+        C[Place Payload.dll]
     end
 
-    subgraph STAGING ["Staging Directory"]
-        S1[powershell.exe]
-        S2[powershell.exe.config]
-        S3[Payload.dll]
+    subgraph Execution
+        D[Run staged powershell.exe]
+        E[CLR reads .config]
+        F[CLR loads AppDomainManager]
+        G[Payload executes]
+        H[calc.exe spawns]
     end
 
-    subgraph EXECUTION ["Execution Flow"]
-        E1[Execute staged\npowershell.exe]
-        E2[CLR reads\n.config file]
-        E3[CLR loads\nAppDomainManager]
-        E4[Payload.Injector\nexecutes]
-        E5[calc.exe\nspawns]
-    end
+    A --> D
+    B --> D
+    C --> D
+    D --> E --> F --> G --> H
+```
 
-    A1 --> S1
-    A2 --> S2
-    A3 --> S3
-    S1 --> E1
-    E1 --> E2
-    E2 --> E3
-    E3 --> E4
-    E4 --> E5
-
-    style E5 fill:#90EE90
-    style S2 fill:#FFB6C1
-    style S3 fill:#FFB6C1
+**Staging directory contents:**
+```
+C:\Temp\staging\
+├── powershell.exe           # Copied from System32
+├── powershell.exe.config    # Malicious config
+└── Payload.dll              # AppDomainManager
 ```
 
 **Config file content:**
@@ -64,65 +58,48 @@ flowchart LR
 ### Technique 2: Environment Variable Hijack
 
 ```mermaid
-flowchart LR
-    subgraph ATTACKER ["Attacker Actions"]
-        A1[Copy target binary\nto TEMP folder]
-        A2[Place Payload.dll\nin same folder]
-        A3[Set environment\nvariables]
+graph LR
+    subgraph Preparation
+        A[Copy binary to TEMP]
+        B[Place Payload.dll]
+        C[Set env variables]
     end
 
-    subgraph ENVVARS ["Environment Variables"]
-        V1["APPDOMAIN_MANAGER_ASM\n= Payload, Version=1.0.0.0..."]
-        V2["APPDOMAIN_MANAGER_TYPE\n= Payload.Injector"]
-        V3["COMPLUS_Version\n= v4.0.30319"]
+    subgraph Variables
+        D[APPDOMAIN_MANAGER_ASM]
+        E[APPDOMAIN_MANAGER_TYPE]
+        F[COMPLUS_Version]
     end
 
-    subgraph EXECUTION ["Execution Flow"]
-        E1[Execute .NET\nprocess]
-        E2[CLR reads\nenv variables]
-        E3[CLR loads\nAppDomainManager]
-        E4[Payload.Injector\nexecutes]
-        E5[calc.exe\nspawns]
+    subgraph Execution
+        G[Run .NET process]
+        H[CLR reads env vars]
+        I[CLR loads Payload.dll]
+        J[calc.exe spawns]
     end
 
-    A1 --> E1
-    A2 --> E1
-    A3 --> V1
-    A3 --> V2
-    A3 --> V3
-    V1 --> E2
-    V2 --> E2
-    V3 --> E2
-    E1 --> E2
-    E2 --> E3
-    E3 --> E4
-    E4 --> E5
+    A --> G
+    B --> G
+    C --> D & E & F
+    D & E & F --> H
+    G --> H --> I --> J
+```
 
-    style E5 fill:#90EE90
-    style V1 fill:#FFB6C1
-    style V2 fill:#FFB6C1
-    style V3 fill:#FFB6C1
+**Environment variables set:**
+```
+APPDOMAIN_MANAGER_ASM  = Payload, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null
+APPDOMAIN_MANAGER_TYPE = Payload.Injector
+COMPLUS_Version        = v4.0.30319
 ```
 
 ### Comparison
 
-```mermaid
-flowchart TB
-    subgraph CONFIG ["Config File Hijack"]
-        C1["Artifacts: .config + DLL"]
-        C2["Detection: File monitoring"]
-        C3["Stealth: Medium"]
-    end
-
-    subgraph ENVVAR ["Env Variable Hijack"]
-        E1["Artifacts: DLL only"]
-        E2["Detection: Process env capture"]
-        E3["Stealth: Higher"]
-    end
-
-    style C1 fill:#FFDAB9
-    style E1 fill:#FFDAB9
-```
+| Aspect | Config Hijack | Env Var Hijack |
+|--------|---------------|----------------|
+| **Artifacts** | .config + DLL | DLL only |
+| **Detection** | File monitoring | Process env capture |
+| **Stealth** | Medium | Higher |
+| **Persistence** | Survives reboot | Session only |
 
 ## MITRE ATT&CK Mapping
 
